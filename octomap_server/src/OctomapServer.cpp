@@ -77,7 +77,8 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_useFixedHeightColor(false),
   m_visualNear(true),
   m_nearXRange(5.0),
-  m_nearYRange(5.0)
+  m_nearYRange(5.0),
+  m_voxel_filter_input_cloud(true)
 {
   double probHit, probMiss, thresMin, thresMax;
 
@@ -125,6 +126,7 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_nh_private.param("visual_near", m_visualNear, m_visualNear);
   m_nh_private.param("near_x_range", m_nearXRange, m_nearXRange);
   m_nh_private.param("near_y_range", m_nearYRange, m_nearYRange);
+  m_nh_private.param("voxel_filter_input_cloud", m_voxel_filter_input_cloud, m_voxel_filter_input_cloud);
 
   if (m_filterGroundPlane && (m_pointcloudMinZ > 0.0 || m_pointcloudMaxZ < 0.0)){
     ROS_WARN_STREAM("You enabled ground filtering but incoming pointclouds will be pre-filtered in ["
@@ -284,6 +286,13 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   //
   PCLPointCloud pc; // input cloud for filtering and ground-detection
   pcl::fromROSMsg(*cloud, pc);
+  
+  if (m_voxel_filter_input_cloud) {
+    pcl::VoxelGrid<PCLPoint> vg;
+    vg.setInputCloud(pc.makeShared());
+    vg.setLeafSize(m_res, m_res, m_res);
+    vg.filter(pc);
+  }
 
   tf::StampedTransform sensorToWorldTf;
   try {

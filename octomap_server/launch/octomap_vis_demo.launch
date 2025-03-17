@@ -30,6 +30,8 @@
 		<param name="occupancy_max_z" value="3"/>
 
 		<param name="latch" value="false"/>
+
+		<param name="voxel_filter_input_cloud" value="true" />
 		
 		<!-- data source to integrate (PointCloud2) -->
 		<remap from="cloud_in" to="/cloud_registered_body" />

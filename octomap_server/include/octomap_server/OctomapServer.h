@@ -56,6 +56,7 @@
 #include <pcl/io/pcd_io.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 
 
@@ -275,6 +276,8 @@ protected:
   bool m_visualNear;
   double m_nearXRange;
   double m_nearYRange;
+
+  bool m_voxel_filter_input_cloud;
 };
 }
 
