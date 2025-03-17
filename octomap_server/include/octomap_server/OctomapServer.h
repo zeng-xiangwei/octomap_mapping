@@ -129,7 +129,7 @@ protected:
   void publishBinaryOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   void publishFullOctoMap(const ros::Time& rostime = ros::Time::now()) const;
   void publishProjected2DMap(const ros::Time& rostime = ros::Time::now());
-  virtual void publishAll(const ros::Time& rostime = ros::Time::now());
+  virtual void publishAll(const ros::Time& rostime = ros::Time::now(), bool only_visual_near = false, const Eigen::Vector3d& sensor_origin = Eigen::Vector3d::Zero());
 
   /**
   * @brief update occupancy map with a scan labeled as ground and nonground.
@@ -203,7 +203,7 @@ protected:
                 || oldMapInfo.origin.position.y != newMapInfo.origin.position.y);
   }
 
-  static std_msgs::ColorRGBA heightMapColor(double h);
+  static std_msgs::ColorRGBA heightMapColor(double h, float alpha);
   ros::NodeHandle m_nh;
   ros::NodeHandle m_nh_private;
   ros::Publisher  m_markerPub, m_binaryMapPub, m_fullMapPub, m_pointCloudPub, m_collisionObjectPub, m_mapPub, m_cmapPub, m_fmapPub, m_fmarkerPub;
@@ -265,6 +265,16 @@ protected:
   unsigned m_multires2DScale;
   bool m_projectCompleteMap;
   bool m_useColoredMap;
+
+  double m_heightColorMinZ;
+  double m_heightColorMaxZ;
+  double m_colorAlpha;
+  bool m_useFixedHeightColor;
+
+  // 只展示给定中心一定范围的数据
+  bool m_visualNear;
+  double m_nearXRange;
+  double m_nearYRange;
 };
 }
 

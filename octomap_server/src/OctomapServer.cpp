@@ -70,7 +70,14 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_groundFilterDistance(0.04), m_groundFilterAngle(0.15), m_groundFilterPlaneDistance(0.07),
   m_compressMap(true),
   m_incrementalUpdate(false),
-  m_initConfig(true)
+  m_initConfig(true),
+  m_heightColorMinZ(-std::numeric_limits<double>::max()),
+  m_heightColorMaxZ(std::numeric_limits<double>::max()),
+  m_colorAlpha(1.0),
+  m_useFixedHeightColor(false),
+  m_visualNear(true),
+  m_nearXRange(5.0),
+  m_nearYRange(5.0)
 {
   double probHit, probMiss, thresMin, thresMax;
 
@@ -110,6 +117,14 @@ OctomapServer::OctomapServer(const ros::NodeHandle private_nh_, const ros::NodeH
   m_nh_private.param("sensor_model/max", thresMax, 0.97);
   m_nh_private.param("compress_map", m_compressMap, m_compressMap);
   m_nh_private.param("incremental_2D_projection", m_incrementalUpdate, m_incrementalUpdate);
+
+  m_nh_private.param("height_color_min_z", m_heightColorMinZ, m_heightColorMinZ);
+  m_nh_private.param("height_color_max_z", m_heightColorMaxZ, m_heightColorMaxZ);
+  m_nh_private.param("color_alpha", m_colorAlpha, m_colorAlpha);
+  m_nh_private.param("use_fixed_height_color", m_useFixedHeightColor, m_useFixedHeightColor);
+  m_nh_private.param("visual_near", m_visualNear, m_visualNear);
+  m_nh_private.param("near_x_range", m_nearXRange, m_nearXRange);
+  m_nh_private.param("near_y_range", m_nearYRange, m_nearYRange);
 
   if (m_filterGroundPlane && (m_pointcloudMinZ > 0.0 || m_pointcloudMaxZ < 0.0)){
     ROS_WARN_STREAM("You enabled ground filtering but incoming pointclouds will be pre-filtered in ["
@@ -351,7 +366,8 @@ void OctomapServer::insertCloudCallback(const sensor_msgs::PointCloud2::ConstPtr
   double total_elapsed = (ros::WallTime::now() - startTime).toSec();
   ROS_DEBUG("Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)", pc_ground.size(), pc_nonground.size(), total_elapsed);
 
-  publishAll(cloud->header.stamp);
+  Eigen::Vector3d sensorOrigin(sensorToWorldTf.getOrigin().x(), sensorToWorldTf.getOrigin().y(), sensorToWorldTf.getOrigin().z());
+  publishAll(cloud->header.stamp, m_visualNear, sensorOrigin);
 }
 
 void OctomapServer::insertScan(const tf::Point& sensorOriginTf, const PCLPointCloud& ground, const PCLPointCloud& nonground){
@@ -494,7 +510,7 @@ void OctomapServer::publishProjected2DMap(const ros::Time& rostime) {
   }
 }
 
-void OctomapServer::publishAll(const ros::Time& rostime){
+void OctomapServer::publishAll(const ros::Time& rostime, bool only_visual_near, const Eigen::Vector3d& sensor_origin){
   ros::WallTime startTime = ros::WallTime::now();
   size_t octomapSize = m_octree->size();
   // TODO: estimate num occ. voxels for size of arrays (reserve)
@@ -574,14 +590,25 @@ void OctomapServer::publishAll(const ros::Time& rostime){
           cubeCenter.y = y;
           cubeCenter.z = z;
 
+          if (only_visual_near) {
+            if (std::abs(cubeCenter.x - sensor_origin.x()) > m_nearXRange ||
+                std::abs(cubeCenter.y - sensor_origin.y()) > m_nearYRange) {
+              continue;
+            }
+          }
+
           occupiedNodesVis.markers[idx].points.push_back(cubeCenter);
           if (m_useHeightMap){
             double minX, minY, minZ, maxX, maxY, maxZ;
             m_octree->getMetricMin(minX, minY, minZ);
             m_octree->getMetricMax(maxX, maxY, maxZ);
 
+            if (m_useFixedHeightColor) {
+              minZ = m_heightColorMinZ == -std::numeric_limits<double>::max() ? minZ : m_heightColorMinZ;
+              maxZ = m_heightColorMaxZ == std::numeric_limits<double>::max() ? maxZ : m_heightColorMaxZ;
+            }
             double h = (1.0 - std::min(std::max((cubeCenter.z-minZ)/ (maxZ - minZ), 0.0), 1.0)) *m_colorFactor;
-            occupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h));
+            occupiedNodesVis.markers[idx].colors.push_back(heightMapColor(h, m_colorAlpha));
           }
 
 #ifdef COLOR_OCTOMAP_SERVER
@@ -1235,16 +1262,23 @@ void OctomapServer::adjustMapData(nav_msgs::OccupancyGrid& map, const nav_msgs::
 }
 
 
-std_msgs::ColorRGBA OctomapServer::heightMapColor(double h) {
+std_msgs::ColorRGBA OctomapServer::heightMapColor(double h, float alpha) {
 
   std_msgs::ColorRGBA color;
-  color.a = 1.0;
+  color.a = std::clamp(alpha, 0.0f, 1.0f);
   // blend over HSV-values (more colors)
 
   double s = 1.0;
   double v = 1.0;
 
   h -= floor(h);
+
+  // 移动颜色
+  h -= 3.0 / 6.0;
+  if (h < 0.0) {
+    h += 1.0;
+  }
+
   h *= 6;
   int i;
   double m, n, f;
