@@ -309,6 +309,13 @@ OctomapServer::OctomapServer(const rclcpp::NodeOptions & node_options)
     std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
 
   using std::chrono_literals::operator""s;
+  rmw_qos_profile_t qos_profile = rmw_qos_profile_sensor_data;
+  qos_profile.depth = 1;
+
+  // auto sub_options = rclcpp::SubscriptionOptions();
+  // sub_options.qos_overriding_options = rclcpp::QosOverridingOptions::with_default_policies();
+  // sub_options.
+
   point_cloud_sub_.subscribe(this, "cloud_in", rmw_qos_profile_sensor_data);
   tf_point_cloud_sub_ = std::make_shared<tf2_ros::MessageFilter<PointCloud2>>(
     point_cloud_sub_, *tf2_buffer_, world_frame_id_, 5, this->get_node_logging_interface(),
@@ -483,12 +490,17 @@ void OctomapServer::insertCloudCallback(const PointCloud2::ConstSharedPtr cloud)
   insertScan(sensor_to_world_vec3, pc_ground, pc_nonground);
 
   double total_elapsed = (rclcpp::Clock{}.now() - start_time).seconds();
-  RCLCPP_DEBUG(
+  RCLCPP_INFO(
     get_logger(),
     "Pointcloud insertion in OctomapServer done (%zu+%zu pts (ground/nonground), %f sec)",
     pc_ground.size(), pc_nonground.size(), total_elapsed);
 
   publishAll(cloud->header.stamp);
+
+  total_elapsed = (rclcpp::Clock{}.now() - start_time).seconds();
+  RCLCPP_INFO(
+    get_logger(),
+    "cloud callback done cost: %f sec)", total_elapsed);
 }
 
 void OctomapServer::insertScan(

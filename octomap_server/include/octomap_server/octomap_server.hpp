@@ -43,6 +43,7 @@
 #include <pcl/filters/passthrough.h>
 
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/qos.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
 #include "nav_msgs/msg/occupancy_grid.hpp"
 #include "std_msgs/msg/color_rgba.hpp"

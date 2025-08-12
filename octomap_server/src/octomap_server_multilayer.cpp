@@ -46,50 +46,17 @@ OctomapServerMultilayer::OctomapServerMultilayer(const rclcpp::NodeOptions & nod
   // right now 0: base, 1: spine, 2: arms
   ProjectedMap m;
   m.name = "projected_base_map";
-  m.min_z = 0.0;
-  m.max_z = 0.3;
+  m.min_z = declare_parameter("project_base_min", 0.0);
+  m.max_z = declare_parameter("project_base_max", 1.0);
   m.z = 0.0;
   multi_gridmap_.push_back(m);
 
-  m.name = "projected_spine_map";
-  m.min_z = 0.25;
-  m.max_z = 1.4;
-  m.z = 0.6;
-  multi_gridmap_.push_back(m);
-
-  m.name = "projected_arm_map";
-  m.min_z = 0.7;
-  m.max_z = 0.9;
-  m.z = 0.8;
-  multi_gridmap_.push_back(m);
-
+  RCLCPP_INFO(get_logger(), "project_base_min: %f, project_base_max: %f", m.min_z, m.max_z);
   const auto qos = latched_topics_ ? rclcpp::QoS{5}.transient_local() : rclcpp::QoS{5};
 
   for (size_t i = 0; i < multi_gridmap_.size(); ++i) {
     multi_map_pub_.push_back(create_publisher<OccupancyGrid>(multi_gridmap_.at(i).name, qos));
   }
-
-  // init arm links (could be params as well)
-  arm_links_.push_back("l_elbow_flex_link");
-  arm_link_offsets_.push_back(0.10);
-  arm_links_.push_back("l_gripper_l_finger_tip_link");
-  arm_link_offsets_.push_back(0.03);
-  arm_links_.push_back("l_gripper_r_finger_tip_link");
-  arm_link_offsets_.push_back(0.03);
-  arm_links_.push_back("l_upper_arm_roll_link");
-  arm_link_offsets_.push_back(0.16);
-  arm_links_.push_back("l_wrist_flex_link");
-  arm_link_offsets_.push_back(0.05);
-  arm_links_.push_back("r_elbow_flex_link");
-  arm_link_offsets_.push_back(0.10);
-  arm_links_.push_back("r_gripper_l_finger_tip_link");
-  arm_link_offsets_.push_back(0.03);
-  arm_links_.push_back("r_gripper_r_finger_tip_link");
-  arm_link_offsets_.push_back(0.03);
-  arm_links_.push_back("r_upper_arm_roll_link");
-  arm_link_offsets_.push_back(0.16);
-  arm_links_.push_back("r_wrist_flex_link");
-  arm_link_offsets_.push_back(0.05);
 }
 
 void OctomapServerMultilayer::handlePreNodeTraversal(const rclcpp::Time & rostime)
@@ -99,44 +66,6 @@ void OctomapServerMultilayer::handlePreNodeTraversal(const rclcpp::Time & rostim
   MapMetaData gridmap_info = gridmap_.info;
 
   OctomapServer::handlePreNodeTraversal(rostime);
-
-
-  // recalculate height of arm layer (stub, TODO)
-  geometry_msgs::msg::PointStamped vin;
-  vin.point.x = 0;
-  vin.point.y = 0;
-  vin.point.z = 0;
-  vin.header.stamp = rostime;
-  double link_padding = 0.03;
-
-  double min_arm_height = 2.0;
-  double max_arm_height = 0.0;
-
-  for (size_t i = 0; i < arm_links_.size(); ++i) {
-    vin.header.frame_id = arm_links_[i];
-    geometry_msgs::msg::PointStamped vout;
-    geometry_msgs::msg::TransformStamped transform_stamped;
-    try {
-      transform_stamped = tf2_buffer_->lookupTransform(
-        "base_footprint", arm_links_.at(i), rclcpp::Time(0),
-        rclcpp::Duration::from_seconds(1.0));
-    } catch (const tf2::TransformException & ex) {
-      RCLCPP_WARN(this->get_logger(), "%s", ex.what());
-      return;
-    }
-    tf2::doTransform(vin, vout, transform_stamped);
-    max_arm_height = std::max(
-      max_arm_height, vout.point.z + (arm_link_offsets_.at(i) + link_padding));
-    min_arm_height = std::min(
-      min_arm_height, vout.point.z - (arm_link_offsets_.at(i) + link_padding));
-  }
-  RCLCPP_INFO(
-    get_logger(), "Arm layer interval adjusted to (%f,%f)", min_arm_height,
-    max_arm_height);
-  multi_gridmap_.at(2).min_z = min_arm_height;
-  multi_gridmap_.at(2).max_z = max_arm_height;
-  multi_gridmap_.at(2).z = (max_arm_height + min_arm_height) / 2.0;
-
 
   // TODO(someone): also clear multilevel maps in BBX region (see OctomapServer.cpp)?
 
